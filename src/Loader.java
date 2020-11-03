@@ -18,16 +18,16 @@ public class Loader
                 String line = scanner.nextLine();
                 if (line.startsWith("//")) {
                     String[] instrCodes = line.substring(3).split(" ");
-                    switch (instrCodes[0]) {
-                        case "JOB" -> currentPcb = new PCB(instrCodes[1], instrCodes[2], instrCodes[3]);
-                        case "Data" -> {
-                            if (currentPcb != null) {
-                                currentPcb.setInputBufferSize(Integer.parseInt(instrCodes[1], 16));
-                                currentPcb.setOutputBufferSize(Integer.parseInt(instrCodes[2], 16));
-                                currentPcb.setTempBufferSize(Integer.parseInt(instrCodes[3], 16));
-                            }
+                    if (instrCodes[0].equals("JOB")) {
+                        currentPcb = new PCB(instrCodes[1], instrCodes[2], instrCodes[3], index);
+                    } else if (instrCodes[0].equals("Data")) {
+                        if (currentPcb != null) {
+                            currentPcb.setInputBufferSize(Integer.parseInt(instrCodes[1], 16));
+                            currentPcb.setOutputBufferSize(Integer.parseInt(instrCodes[2], 16));
+                            currentPcb.setTempBufferSize(Integer.parseInt(instrCodes[3], 16));
                         }
-                        case "END" -> scheduler.addJob(currentPcb);
+                    } else if (instrCodes[0].equals("END")) {
+                        scheduler.addJob(currentPcb);
                     }
                 } else {
                     // Store instruction on disk
@@ -40,7 +40,5 @@ public class Loader
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-
-        scheduler.listJobs();
     }
 }

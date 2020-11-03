@@ -1,28 +1,41 @@
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Schedules jobs based on priority.
  */
 public class Scheduler {
-    // TODO: implement a priority queue
 
-    ArrayList<PCB> jobList = new ArrayList<>();
+    int counter = 0;
+    HashMap<Integer, PCB> jobList = new HashMap<>();
+    ArrayList<PCB> sortedList = new ArrayList<>();
 
     /**
      * Add a job to the priority queue and list of jobs.
      * @param job The job to be added.
      */
     public void addJob(PCB job) {
-        jobList.add(job);
-        // TODO: Implement adding to queue
+        System.out.println(job.jobId);
+        jobList.put(job.getPriority(), job);
+    }
+
+    public void sortList() {
+        TreeMap<Integer, PCB> treeMap = new TreeMap<>(jobList);
+        for (Map.Entry<Integer, PCB> entry : treeMap.entrySet()) {
+            System.out.println(entry.getKey() + " | " + entry.getValue().jobId);
+            sortedList.add(entry.getValue());
+        }
     }
 
     /**
      * Load the next job from disk into RAM.
      */
     public PCB nextJob() {
-        // TODO: implement nextJob method
-        return null;
+        PCB job = sortedList.get(counter);
+        counter++;
+        return job;
     }
 
     /**
@@ -30,8 +43,7 @@ public class Scheduler {
      * @return true if no jobs left.
      */
     public boolean allJobsDone() {
-        // TODO: implement allJobsDone method
-        return false;
+        return counter == sortedList.size() - 1;
     }
 
     /**
@@ -39,15 +51,5 @@ public class Scheduler {
      */
     public void waitForInterrupt() {
         // TODO: implement waitForInterrupt method (might be in wrong class)
-    }
-
-    /**
-     * A simple debug job list method. TODO: remove this
-     */
-    public void listJobs() {
-        for (PCB job : jobList) {
-            System.out.println("jobId=" + job.jobId + " | priority=" + job.priority
-                    + " | numInstructions=" + job.numInstructions);
-        }
     }
 }

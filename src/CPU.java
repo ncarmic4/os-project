@@ -15,7 +15,7 @@ public class CPU {
     private int reg1Index, reg2Index, reg3Index, addressIndex;
 
     MMU mmu;
-    Registers[] registers;
+    Registers[] registers = new Registers[16];
 
     // Program continuation variables
     private int pc;
@@ -78,6 +78,10 @@ public class CPU {
         }
     }
 
+    public void setProgramCounter(int pc) {
+        this.pc = pc;
+    }
+
     /**
      * Method to initialize register indexes based on instruction format.
      * These are predefined, so for example arithmetic instructions specify reg1
@@ -86,7 +90,7 @@ public class CPU {
      */
     private void instructionFormat(String format) {
         switch (format) {
-            case "00" -> { // ARITHMETIC
+            case "00": { // ARITHMETIC
                 String reg1 = binary.substring(8, 12);
                 reg1Index = Integer.parseInt(reg1, 2);
 
@@ -96,7 +100,7 @@ public class CPU {
                 String reg3 = binary.substring(16, 20);
                 reg3Index = Integer.parseInt(reg3, 2);
             }
-            case "01", "11" -> { // CONDITIONAL, INPUT/OUTPUT
+            case "01": {
                 String reg1 = binary.substring(8, 12);
                 reg1Index = Integer.parseInt(reg1, 2);
 
@@ -106,7 +110,17 @@ public class CPU {
                 address = binary.substring(16, 32);
                 addressIndex = Integer.parseInt(address, 2) / 4;
             }
-            case "10" -> { // UNCONDITIONAL
+            case "11": { // CONDITIONAL, INPUT/OUTPUT
+                String reg1 = binary.substring(8, 12);
+                reg1Index = Integer.parseInt(reg1, 2);
+
+                String reg2 = binary.substring(12, 16);
+                reg2Index = Integer.parseInt(reg2, 2);
+
+                address = binary.substring(16, 32);
+                addressIndex = Integer.parseInt(address, 2) / 4;
+            }
+            case "10": { // UNCONDITIONAL
                 address = binary.substring(8, 32);
                 addressIndex = Integer.parseInt(address, 2) / 4;
             }
@@ -119,103 +133,107 @@ public class CPU {
      */
     private void evaluate(String opcode) {
         switch (opcode) {
-            case "RD" -> {
+            case "RD" : {
                 if (addressIndex == 0) {
                     registers[reg1Index].data = Integer.parseInt(mmu.ram[registers[reg2Index].data], 16);
                 } else {
                     registers[reg1Index].data = Integer.parseInt(mmu.ram[addressIndex], 16);
                 }
             }
-            case "WR" -> mmu.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
-            case "ST" -> {
+            case "WR" : {
+                mmu.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+            }
+            case "ST" : {
                 if (addressIndex == 0) {
                     mmu.ram[registers[reg2Index].data] = Integer.toHexString(registers[reg1Index].data);
                 } else {
                     mmu.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
                 }
             }
-            case "LW" -> {
+            case "LW" : {
                 if (addressIndex == 0) {
                     registers[reg2Index].data = Integer.parseInt(mmu.ram[registers[reg1Index].data], 16);
                 } else {
                     registers[reg2Index].data = Integer.parseInt(mmu.ram[addressIndex], 16);
                 }
             }
-            case "MOV" -> registers[reg3Index].data = registers[reg1Index].data;
-            case "ADD" -> registers[reg3Index].data = registers[reg1Index].data + registers[reg2Index].data;
-            case "SUB" -> registers[reg3Index].data = registers[reg1Index].data - registers[reg2Index].data;
-            case "MUL" -> registers[reg3Index].data = registers[reg1Index].data * registers[reg2Index].data;
-            case "DIV" -> {
+            case "MOV" : {
+                registers[reg3Index].data = registers[reg1Index].data;
+            }
+            case "ADD": registers[reg3Index].data = registers[reg1Index].data + registers[reg2Index].data;
+            case "SUB": registers[reg3Index].data = registers[reg1Index].data - registers[reg2Index].data;
+            case "MUL": registers[reg3Index].data = registers[reg1Index].data * registers[reg2Index].data;
+            case "DIV": {
                 if (registers[reg2Index].data != 0) {
                     registers[reg3Index].data = registers[reg1Index].data / registers[reg2Index].data;
                 }
             }
-            case "AND" -> {
+            case "AND": {
                 if (registers[reg1Index].data != 0 && registers[reg2Index].data != 0) {
                     registers[reg3Index].data = 1;
                 } else {
                     registers[reg3Index].data = 0;
                 }
             }
-            case "OR" -> {
+            case "OR": {
                 if (registers[reg1Index].data == 1 || registers[reg2Index].data == 1) {
                     registers[reg3Index].data = 1;
                 } else {
                     registers[reg3Index].data = 0;
                 }
             }
-            case "MOVI" -> registers[reg2Index].data = Integer.parseInt(address, 2);
-            case "ADDI" -> registers[reg2Index].data++;
-            case "MULI" -> registers[reg2Index].data = registers[reg2Index].data * addressIndex;
-            case "DIVI" -> {
+            case "MOVI": registers[reg2Index].data = Integer.parseInt(address, 2);
+            case "ADDI": registers[reg2Index].data++;
+            case "MULI": registers[reg2Index].data = registers[reg2Index].data * addressIndex;
+            case "DIVI": {
                 if (addressIndex != 0) {
                     registers[reg2Index].data = registers[reg2Index].data / addressIndex;
                 }
             }
-            case "LDI" -> registers[reg2Index].data = addressIndex;
-            case "SLT" -> {
+            case "LDI": registers[reg2Index].data = addressIndex;
+            case "SLT": {
                 if (registers[reg1Index].data < registers[reg2Index].data) {
                     registers[reg3Index].data = 1;
                 } else {
                     registers[reg3Index].data = 0;
                 }
             }
-            case "SLTI" -> {
+            case "SLTI": {
                 if (registers[reg1Index].data < addressIndex) {
                     registers[reg2Index].data = 1;
                 } else {
                     registers[reg2Index].data = 0;
                 }
             }
-            case "HLT" -> continueExecution = false;
-            case "NOP" -> pc++;
-            case "JMP" -> pc = addressIndex;
-            case "BEQ" -> {
+            case "HLT": continueExecution = false;
+            case "NOP": pc++;
+            case "JMP": pc = addressIndex;
+            case "BEQ": {
                 if (registers[reg1Index].data == registers[reg2Index].data) {
                     pc = addressIndex;
                 }
             }
-            case "BNE" -> {
+            case "BNE": {
                 if (registers[reg1Index].data != registers[reg2Index].data) {
                     pc = addressIndex;
                 }
             }
-            case "BEZ" -> {
+            case "BEZ": {
                 if (registers[reg2Index].data == 0) {
                     pc = addressIndex;
                 }
             }
-            case "BNZ" -> {
+            case "BNZ": {
                 if (registers[reg1Index].data != 0) {
                     pc = addressIndex;
                 }
             }
-            case "BGZ" -> {
+            case "BGZ": {
                 if (registers[reg1Index].data > 0) {
                     pc = addressIndex;
                 }
             }
-            case "BLZ" -> {
+            case "BLZ": {
                 if (registers[reg1Index].data < 0) {
                     pc = addressIndex;
                 }

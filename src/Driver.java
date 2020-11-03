@@ -7,10 +7,11 @@ public class Driver {
         MMU mmu = new MMU();
         CPU cpu = new CPU(mmu);
         Scheduler scheduler = new Scheduler();
-        Dispatcher dispatcher = new Dispatcher();
+        Dispatcher dispatcher = new Dispatcher(mmu);
 
         // Program execution
         Loader.load(mmu, scheduler);
+        scheduler.sortList();
         while (!scheduler.allJobsDone()) {
             PCB nextJob = scheduler.nextJob();
             dispatcher.dispatch(nextJob, cpu);
