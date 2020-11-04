@@ -1,24 +1,59 @@
+import java.util.concurrent.Semaphore;
+
 /**
  * Memory Management Unit.
  */
-public class MMU
+class MMU
 {
-    public String[] ram = new String[1024];
-    public String[] disk = new String[2048];
+    static String[] ram = new String[1024];
+    static String[] disk = new String[2048];
 
-    public String loadRam(int address) {
-        return ram[address].substring(0, 8);
+    static void init() {
+        for (int i = 0; i < ram.length; i++) {
+            storeRam(i, "");
+        }
     }
 
-    public void storeRam(int address, String data) {
+    static int nextAvailableBits(int size) {
+        int numAvailable = 0;
+        for (int i = 0; i < ram.length; i++) {
+            if (numAvailable == size) {
+                return i - size;
+            }
+
+            if(ram[i].isEmpty()) {
+                numAvailable++;
+            } else {
+                numAvailable = 0;
+            }
+        }
+
+        return -1;
+    }
+
+    static void clearBits(int inclusiveStart, int exclusiveEnd) {
+        for (int i = inclusiveStart; i < exclusiveEnd; i++) {
+            storeRam(i, "");
+        }
+    }
+
+    static String loadRam(int address) {
+        if (ram[address].isEmpty()) {
+            return "";
+        } else {
+            return ram[address].substring(0, 8);
+        }
+    }
+
+    static void storeRam(int address, String data) {
         ram[address] = data;
     }
 
-    public String loadDisk(int address) {
+    static String loadDisk(int address) {
         return disk[address].substring(0, 8);
     }
 
-    public void storeDisk(int address, String data) {
+    static void storeDisk(int address, String data) {
         disk[address] = data;
     }
 }

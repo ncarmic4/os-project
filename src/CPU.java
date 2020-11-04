@@ -1,10 +1,15 @@
+import com.sun.jdi.request.ThreadDeathRequest;
+
 import java.math.BigInteger;
 
 /**
  * Core Processing Unit.
  * A class to handle execution of instructions read from memory.
  */
-public class CPU {
+public class CPU extends Thread {
+    private PCB currentJob;
+    private int cpuId;
+
     // Determine opcode by indexing opcodeArray
     private final String[] opcodeArray = {"RD", "WR", "ST", "LW", "MOV", "ADD", "SUB", "MUL", "DIV", "AND",
             "OR", "MOVI", "ADDI", "MULI", "DIVI", "LDI", "SLT", "SLTI", "HLT", "NOP", "JMP", "BEQ",
@@ -13,20 +18,24 @@ public class CPU {
     // Properties of binary instructions
     private String binary, address;
     private int reg1Index, reg2Index, reg3Index, addressIndex;
+    private Register[] registers = new Register[16];
+    private String[] cache = new String[128];
 
-    MMU mmu;
-    Registers[] registers = new Registers[16];
+    // Assign Job state to numeric value for comparisons in PriorityQueue
+    public static final String[] cpuStates = new String[] {"free", "executing"};
+    private int cpuState;
 
     // Program continuation variables
     private int pc;
     private boolean continueExecution = true;
+    private boolean hasInterrupt = false;
 
-    public CPU (MMU mmu) {
-        this.mmu = mmu;
-    }
-
-    public void setRegisters(Registers[] registers) {
-        this.registers = registers;
+    public CPU (int id) {
+        this.cpuId = id;
+        this.cpuState = 0; // state = free
+        for (int i = 0; i < this.registers.length; i++) {
+            this.registers[i] = new Register();
+        }
     }
 
     /**
@@ -34,8 +43,8 @@ public class CPU {
      * @param index Address of the variable.
      * @return Value of the variable.
      */
-    String fetch(int index) {
-        return mmu.loadRam(index);
+    private String fetch(int index) {
+        return cache[index].substring(0, 8);
     }
 
     /**
@@ -45,7 +54,7 @@ public class CPU {
      * Chars 8-32 indicate additional registers, addresses, etc.
      * @param hex Instruction string in hex format.
      */
-    void decode(String hex) {
+    private void decode(String hex) {
         StringBuilder binaryStr = new StringBuilder();
         binaryStr.append(new BigInteger(hex, 16).toString(2));
         // Adds leading zeros if binary string is less than 32 chars long
@@ -62,24 +71,72 @@ public class CPU {
         evaluate(opcodeArray[Integer.parseInt(opcodeBinary, 2)]);
     }
 
-    /**
-     * Main execution of the CPU.
-     */
-    void execute() {
-        String hex = fetch(pc);
-        pc++;
-        decode(hex);
+    @Override
+    public void run() {
 
-        // We set boolean continueExecution to false when the HLT opcode is called
-        if(continueExecution) {
-            execute();
-        } else {
-            // TODO: Figure out which register to output as final val
+        // TODO: interrupt handling
+        //  check if jobs complete successfully
+
+        while (!Scheduler.allJobsDone()) {
+            PCB nextJob = Scheduler.nextJob();
+            if (nextJob != null) {
+                Dispatcher.load(nextJob, this);
+                loadInstructionsToCache();
+                MMU.clearBits(currentJob.getRamStart(), currentJob.getRamEnd());
+                if (pc < currentJob.getProgramCounter()) {
+                    String hex = fetch(pc);
+                    pc++;
+                    currentJob.incrementProgramCounter();
+                    decode(hex);
+                }
+                Dispatcher.unload(currentJob, this);
+                clearCache();
+            }
         }
     }
 
-    public void setProgramCounter(int pc) {
+    void setProgramCounter(int pc) {
         this.pc = pc;
+        this.continueExecution = true;
+    }
+    void setCurrentJob(PCB job) {
+        this.currentJob = job;
+    }
+    PCB getCurrentJob() {
+        return currentJob;
+    }
+    void setHasInterrupt(boolean interrupt) {
+        this.hasInterrupt = interrupt;
+    }
+    String getCpuStateString() {
+        return cpuStates[cpuState];
+    }
+    void setCpuState(String cpuState) {
+        for (int i = 0; i < cpuStates.length; i++) {
+            if (cpuStates[i].equals(cpuState)) {
+                this.cpuState = i;
+                return;
+            }
+        }
+    }
+    int getCpuId() {
+        return cpuId;
+    }
+    void setRegisters(Register[] registers) {
+        this.registers = registers;
+    }
+    Register[] getRegisters() {
+        return registers;
+    }
+    void clearCache() {
+        for (int i = 0; i < cache.length; i++) {
+            cache[i] = "";
+        }
+    }
+    void loadInstructionsToCache() {
+        for (int i = 0; i < currentJob.getTotalSize(); i++) {
+            cache[i] = MMU.loadRam(currentJob.getRamStart() + i);
+        }
     }
 
     /**
@@ -99,9 +156,11 @@ public class CPU {
 
                 String reg3 = binary.substring(16, 20);
                 reg3Index = Integer.parseInt(reg3, 2);
+                break;
             }
-            case "01": {
-                String reg1 = binary.substring(8, 12);
+            case "01": // CONDITIONAL
+            case "11": { // INPUT/OUTPUT
+                    String reg1 = binary.substring(8, 12);
                 reg1Index = Integer.parseInt(reg1, 2);
 
                 String reg2 = binary.substring(12, 16);
@@ -109,20 +168,12 @@ public class CPU {
 
                 address = binary.substring(16, 32);
                 addressIndex = Integer.parseInt(address, 2) / 4;
-            }
-            case "11": { // CONDITIONAL, INPUT/OUTPUT
-                String reg1 = binary.substring(8, 12);
-                reg1Index = Integer.parseInt(reg1, 2);
-
-                String reg2 = binary.substring(12, 16);
-                reg2Index = Integer.parseInt(reg2, 2);
-
-                address = binary.substring(16, 32);
-                addressIndex = Integer.parseInt(address, 2) / 4;
+                break;
             }
             case "10": { // UNCONDITIONAL
                 address = binary.substring(8, 32);
                 addressIndex = Integer.parseInt(address, 2) / 4;
+                break;
             }
         }
     }
@@ -133,40 +184,55 @@ public class CPU {
      */
     private void evaluate(String opcode) {
         switch (opcode) {
-            case "RD" : {
+            case "RD": {
                 if (addressIndex == 0) {
-                    registers[reg1Index].data = Integer.parseInt(mmu.ram[registers[reg2Index].data], 16);
+                    registers[reg1Index].data = Integer.parseInt(MMU.ram[registers[reg2Index].data], 16);
                 } else {
-                    registers[reg1Index].data = Integer.parseInt(mmu.ram[addressIndex], 16);
+                    registers[reg1Index].data = Integer.parseInt(MMU.ram[addressIndex], 16);
                 }
+                break;
             }
-            case "WR" : {
-                mmu.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+            case "WR": {
+                MMU.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+                break;
             }
-            case "ST" : {
+            case "ST": {
                 if (addressIndex == 0) {
-                    mmu.ram[registers[reg2Index].data] = Integer.toHexString(registers[reg1Index].data);
+                    MMU.ram[registers[reg2Index].data] = Integer.toHexString(registers[reg1Index].data);
                 } else {
-                    mmu.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+                    MMU.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
                 }
+                break;
             }
-            case "LW" : {
+            case "LW": {
                 if (addressIndex == 0) {
-                    registers[reg2Index].data = Integer.parseInt(mmu.ram[registers[reg1Index].data], 16);
+                    registers[reg2Index].data = Integer.parseInt(MMU.ram[registers[reg1Index].data], 16);
                 } else {
-                    registers[reg2Index].data = Integer.parseInt(mmu.ram[addressIndex], 16);
+                    registers[reg2Index].data = Integer.parseInt(MMU.ram[addressIndex], 16);
                 }
+                break;
             }
-            case "MOV" : {
+            case "MOV": {
                 registers[reg3Index].data = registers[reg1Index].data;
+                break;
             }
-            case "ADD": registers[reg3Index].data = registers[reg1Index].data + registers[reg2Index].data;
-            case "SUB": registers[reg3Index].data = registers[reg1Index].data - registers[reg2Index].data;
-            case "MUL": registers[reg3Index].data = registers[reg1Index].data * registers[reg2Index].data;
+            case "ADD": {
+                registers[reg3Index].data = registers[reg1Index].data + registers[reg2Index].data;
+                break;
+            }
+            case "SUB": {
+                registers[reg3Index].data = registers[reg1Index].data - registers[reg2Index].data;
+                break;
+            }
+            case "MUL": {
+                registers[reg3Index].data = registers[reg1Index].data * registers[reg2Index].data;
+                break;
+            }
             case "DIV": {
                 if (registers[reg2Index].data != 0) {
                     registers[reg3Index].data = registers[reg1Index].data / registers[reg2Index].data;
                 }
+                break;
             }
             case "AND": {
                 if (registers[reg1Index].data != 0 && registers[reg2Index].data != 0) {
@@ -174,6 +240,7 @@ public class CPU {
                 } else {
                     registers[reg3Index].data = 0;
                 }
+                break;
             }
             case "OR": {
                 if (registers[reg1Index].data == 1 || registers[reg2Index].data == 1) {
@@ -181,22 +248,37 @@ public class CPU {
                 } else {
                     registers[reg3Index].data = 0;
                 }
+                break;
             }
-            case "MOVI": registers[reg2Index].data = Integer.parseInt(address, 2);
-            case "ADDI": registers[reg2Index].data++;
-            case "MULI": registers[reg2Index].data = registers[reg2Index].data * addressIndex;
+            case "MOVI": {
+                registers[reg2Index].data = Integer.parseInt(address, 2);
+                break;
+            }
+            case "ADDI": {
+                registers[reg2Index].data++;
+                break;
+            }
+            case "MULI": {
+                registers[reg2Index].data = registers[reg2Index].data * addressIndex;
+                break;
+            }
             case "DIVI": {
                 if (addressIndex != 0) {
                     registers[reg2Index].data = registers[reg2Index].data / addressIndex;
                 }
+                break;
             }
-            case "LDI": registers[reg2Index].data = addressIndex;
+            case "LDI": {
+                registers[reg2Index].data = addressIndex;
+                break;
+            }
             case "SLT": {
                 if (registers[reg1Index].data < registers[reg2Index].data) {
                     registers[reg3Index].data = 1;
                 } else {
                     registers[reg3Index].data = 0;
                 }
+                break;
             }
             case "SLTI": {
                 if (registers[reg1Index].data < addressIndex) {
@@ -204,40 +286,61 @@ public class CPU {
                 } else {
                     registers[reg2Index].data = 0;
                 }
+                break;
             }
-            case "HLT": continueExecution = false;
-            case "NOP": pc++;
-            case "JMP": pc = addressIndex;
+            case "HLT": {
+                continueExecution = false;
+                break;
+            }
+            case "NOP": {
+                pc++;
+                break;
+            }
+            case "JMP": {
+                pc = addressIndex;
+                break;
+            }
             case "BEQ": {
                 if (registers[reg1Index].data == registers[reg2Index].data) {
                     pc = addressIndex;
                 }
+                break;
             }
             case "BNE": {
                 if (registers[reg1Index].data != registers[reg2Index].data) {
                     pc = addressIndex;
                 }
+                break;
             }
             case "BEZ": {
                 if (registers[reg2Index].data == 0) {
                     pc = addressIndex;
                 }
+                break;
             }
             case "BNZ": {
                 if (registers[reg1Index].data != 0) {
                     pc = addressIndex;
                 }
+                break;
             }
             case "BGZ": {
                 if (registers[reg1Index].data > 0) {
                     pc = addressIndex;
                 }
+                break;
             }
             case "BLZ": {
                 if (registers[reg1Index].data < 0) {
                     pc = addressIndex;
                 }
+                break;
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "ID: " + cpuId + " | State: " + getCpuStateString();
     }
 }

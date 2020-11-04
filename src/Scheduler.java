@@ -1,55 +1,66 @@
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Schedules jobs based on priority.
  */
 public class Scheduler {
 
-    int counter = 0;
-    HashMap<Integer, PCB> jobList = new HashMap<>();
-    ArrayList<PCB> sortedList = new ArrayList<>();
+    public static int mode = 0; // 0 for priority, 1 for FIFO
+
+    private static final PriorityQueue<PCB> priorityQueue = new PriorityQueue<>();
+    private static final LinkedList<PCB> fifoQueue = new LinkedList<>();
 
     /**
      * Add a job to the priority queue and list of jobs.
      * @param job The job to be added.
      */
-    public void addJob(PCB job) {
-        System.out.println(job.jobId);
-        jobList.put(job.getPriority(), job);
-    }
-
-    public void sortList() {
-        TreeMap<Integer, PCB> treeMap = new TreeMap<>(jobList);
-        for (Map.Entry<Integer, PCB> entry : treeMap.entrySet()) {
-            System.out.println(entry.getKey() + " | " + entry.getValue().jobId);
-            sortedList.add(entry.getValue());
+    static void addJob(PCB job) {
+        job.setAddedTime(System.currentTimeMillis());
+        if (mode == 0) {
+            priorityQueue.add(job);
+        } else {
+            fifoQueue.add(job);
         }
     }
 
     /**
      * Load the next job from disk into RAM.
      */
-    public PCB nextJob() {
-        PCB job = sortedList.get(counter);
-        counter++;
-        return job;
+    static PCB nextJob() {
+        PCB nextJob;
+        if (mode == 0) {
+            nextJob = priorityQueue.poll();
+        } else {
+            nextJob = fifoQueue.poll();
+        }
+
+        if (nextJob != null) {
+            nextJob.setJobState("running");
+            System.out.println(nextJob);
+            nextJob.setStartTime(System.currentTimeMillis());
+        }
+        return nextJob;
     }
 
     /**
      * Check if all jobs have finished executing.
      * @return true if no jobs left.
      */
-    public boolean allJobsDone() {
-        return counter == sortedList.size() - 1;
+    static boolean allJobsDone() {
+        if (mode == 0) {
+            return priorityQueue.size() == 0;
+        } else {
+            return fifoQueue.size() == 0;
+        }
     }
 
-    /**
-     * Check for pending interrupts.
-     */
-    public void waitForInterrupt() {
-        // TODO: implement waitForInterrupt method (might be in wrong class)
+    static void signalInterrupt(CPU cpu) {
+        cpu.setHasInterrupt(true);
+    }
+
+    static void handleInterrupt(CPU cpu) {
+        PCB blockedJob = cpu.getCurrentJob();
+        blockedJob.setJobState("blocked");
+        addJob(blockedJob);
     }
 }

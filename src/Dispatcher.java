@@ -1,25 +1,42 @@
 /**
  * Dispatches jobs to the CPU.
  */
-public class Dispatcher {
-    // TODO: Implement dispatcher
-
-    MMU mmu;
-
-    public Dispatcher(MMU mmu) {
-        this.mmu = mmu;
-    }
+class Dispatcher {
 
     /**
      * Assign a job to a CPU.
-     * @param pcb PCB of a job.
-     * @param cpu CPU to assign the job to.
+     * @param job PCB of a job.
      */
-    public void dispatch(PCB pcb, CPU cpu) {
-        for(int i = 0; i < pcb.numInstructions; i++) {
-            mmu.storeRam(i, mmu.loadDisk(pcb.getFirstInstruction() + i));
-            System.out.println(mmu.loadDisk(pcb.getFirstInstruction() + i) + "=" + mmu.loadRam(i));
+    static void load(PCB job, CPU cpu) {
+        int totalSize = job.getNumInstructions() + job.getDataSize();
+        int ramEndIndex = job.getRamStart() + totalSize;
+        int diskStartIndex = job.getStart();
+        int ramStartIndex = sync(totalSize, ramEndIndex, diskStartIndex);
+
+        job.setCurrentCpu(cpu);
+        job.setRamStart(ramStartIndex);
+        job.setRamEnd(ramEndIndex);
+
+        // Load Instructions and data into RAM
+        cpu.setRegisters(job.getRegisters());
+        cpu.setCpuState("executing");
+        cpu.setProgramCounter(diskStartIndex + job.getProgramCounter());
+        cpu.setCurrentJob(job);
+    }
+
+    static synchronized int sync(int totalSize, int ramEndIndex, int diskStartIndex) {
+        int ramStartIndex = MMU.nextAvailableBits(totalSize); //
+        for(int i = ramStartIndex; i < ramEndIndex; i++) { //
+            MMU.storeRam(i, MMU.loadDisk(diskStartIndex + i - ramStartIndex));
         }
-        cpu.setProgramCounter(pcb.getFirstInstruction());
+        return ramStartIndex;
+    }
+
+    static void unload(PCB job, CPU cpu) {
+        job.setCompletedTime(System.currentTimeMillis());
+        MetricCollector.addJob(job);
+        job.setRegisters(cpu.getRegisters());
+        cpu.setCurrentJob(null);
+        job.setCurrentCpu(null);
     }
 }
