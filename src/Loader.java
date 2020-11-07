@@ -10,7 +10,6 @@ class Loader
     static void load() {
         int index = 0;
         try {
-            int totalJobs = 0;
             File f = new File("src/instructions.txt");
             Scanner scanner = new Scanner(f);
             PCB currentPcb = null;
@@ -20,7 +19,6 @@ class Loader
                     String[] instrCodes = line.substring(3).split(" ");
                     switch (instrCodes[0]) {
                         case "JOB": {
-                            totalJobs++;
                             currentPcb = new PCB(instrCodes[1], instrCodes[2], instrCodes[3], index);
                             break;
                         }
@@ -34,7 +32,7 @@ class Loader
                         }
                         case "END": {
                             if (currentPcb != null) {
-                                currentPcb.setJobState("ready");
+                                currentPcb.setJobState(PCB.JobState.READY);
                                 Scheduler.addJob(currentPcb);
                             }
                             break;

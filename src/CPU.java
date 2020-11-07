@@ -1,6 +1,5 @@
-import com.sun.jdi.request.ThreadDeathRequest;
-
 import java.math.BigInteger;
+import java.util.Arrays;
 
 /**
  * Core Processing Unit.
@@ -8,7 +7,7 @@ import java.math.BigInteger;
  */
 public class CPU extends Thread {
     private PCB currentJob;
-    private int cpuId;
+    private final int cpuId;
 
     // Determine opcode by indexing opcodeArray
     private final String[] opcodeArray = {"RD", "WR", "ST", "LW", "MOV", "ADD", "SUB", "MUL", "DIV", "AND",
@@ -16,26 +15,35 @@ public class CPU extends Thread {
             "BNE", "BEZ", "BNZ", "BGZ", "BLZ"};
 
     // Properties of binary instructions
-    private String binary, address;
-    private int reg1Index, reg2Index, reg3Index, addressIndex;
+    private String binary;
+    private String address;
+    private int reg1Index;
+    private int reg2Index;
+    private int reg3Index;
+    private int addressIndex;
+
+    // Memory
     private Register[] registers = new Register[16];
-    private String[] cache = new String[128];
+    private final String[] cache = new String[Driver.cacheSize];
 
     // Assign Job state to numeric value for comparisons in PriorityQueue
-    public static final String[] cpuStates = new String[] {"free", "executing"};
-    private int cpuState;
+    private CpuState cpuState;
 
     // Program continuation variables
     private int pc;
     private boolean continueExecution = true;
     private boolean hasInterrupt = false;
 
+    // METRICS
+    private long startTime;
+    private long completionTime;
+    private int ioProcesses = 0;
+    private int jobCount;
+
     public CPU (int id) {
+        this.startTime = System.currentTimeMillis();
         this.cpuId = id;
-        this.cpuState = 0; // state = free
-        for (int i = 0; i < this.registers.length; i++) {
-            this.registers[i] = new Register();
-        }
+        this.cpuState = CpuState.FREE;
     }
 
     /**
@@ -77,26 +85,39 @@ public class CPU extends Thread {
         // TODO: interrupt handling
         //  check if jobs complete successfully
 
-        while (!Scheduler.allJobsDone()) {
+        while (!Scheduler.hasNext()) {
             PCB nextJob = Scheduler.nextJob();
             if (nextJob != null) {
-                Dispatcher.load(nextJob, this);
+                jobCount++;
+                cpuState = CpuState.EXECUTING;
+                Dispatcher.loadJob(nextJob, this);
+                nextJob.setRamUsage(MMU.getRamUsage());
                 loadInstructionsToCache();
-                MMU.clearBits(currentJob.getRamStart(), currentJob.getRamEnd());
-                if (pc < currentJob.getProgramCounter()) {
+                nextJob.setCacheUsage(getCacheUsage());
+                while (continueExecution && pc < currentJob.getNumInstructions()) {
+                    // Artificial 1ms exec time for each instruction
+                    try {
+                        Thread.sleep(Driver.msThreadDelay);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     String hex = fetch(pc);
                     pc++;
                     currentJob.incrementProgramCounter();
                     decode(hex);
                 }
-                Dispatcher.unload(currentJob, this);
+                MMU.clearBits(currentJob.getRamStart(), currentJob.getRamEnd());
+                Dispatcher.unloadJob(currentJob, this);
+                cpuState = CpuState.FREE;
                 clearCache();
             }
         }
+
+        completionTime = System.currentTimeMillis();
     }
 
-    void setProgramCounter(int pc) {
-        this.pc = pc;
+    void resetProgramCounter() {
+        this.pc = 0;
         this.continueExecution = true;
     }
     void setCurrentJob(PCB job) {
@@ -108,20 +129,6 @@ public class CPU extends Thread {
     void setHasInterrupt(boolean interrupt) {
         this.hasInterrupt = interrupt;
     }
-    String getCpuStateString() {
-        return cpuStates[cpuState];
-    }
-    void setCpuState(String cpuState) {
-        for (int i = 0; i < cpuStates.length; i++) {
-            if (cpuStates[i].equals(cpuState)) {
-                this.cpuState = i;
-                return;
-            }
-        }
-    }
-    int getCpuId() {
-        return cpuId;
-    }
     void setRegisters(Register[] registers) {
         this.registers = registers;
     }
@@ -129,14 +136,34 @@ public class CPU extends Thread {
         return registers;
     }
     void clearCache() {
-        for (int i = 0; i < cache.length; i++) {
-            cache[i] = "";
-        }
+        Arrays.fill(cache, "");
     }
     void loadInstructionsToCache() {
         for (int i = 0; i < currentJob.getTotalSize(); i++) {
             cache[i] = MMU.loadRam(currentJob.getRamStart() + i);
         }
+    }
+
+    public int getCacheUsage() {
+        int usage = 0;
+        for (String s : cache) {
+            if (s != null && !s.equals("")) {
+                usage++;
+            }
+        }
+        return usage;
+    }
+    public int getCpuId() {
+        return cpuId;
+    }
+    public long getCompletionTime() {
+        return completionTime - startTime;
+    }
+    public int getIoProcesses() {
+        return ioProcesses;
+    }
+    public int getJobCount() {
+        return jobCount;
     }
 
     /**
@@ -186,29 +213,31 @@ public class CPU extends Thread {
         switch (opcode) {
             case "RD": {
                 if (addressIndex == 0) {
-                    registers[reg1Index].data = Integer.parseInt(MMU.ram[registers[reg2Index].data], 16);
+                    registers[reg1Index].data = Integer.parseInt(cache[registers[reg2Index].data], 16);
                 } else {
-                    registers[reg1Index].data = Integer.parseInt(MMU.ram[addressIndex], 16);
+                    registers[reg1Index].data = Integer.parseInt(cache[addressIndex], 16);
                 }
+                ioProcesses++;
                 break;
             }
             case "WR": {
-                MMU.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+                cache[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+                ioProcesses++;
                 break;
             }
             case "ST": {
                 if (addressIndex == 0) {
-                    MMU.ram[registers[reg2Index].data] = Integer.toHexString(registers[reg1Index].data);
+                    cache[registers[reg2Index].data] = Integer.toHexString(registers[reg1Index].data);
                 } else {
-                    MMU.ram[addressIndex] = Integer.toHexString(registers[reg1Index].data);
+                    cache[addressIndex] = Integer.toHexString(registers[reg1Index].data);
                 }
                 break;
             }
             case "LW": {
                 if (addressIndex == 0) {
-                    registers[reg2Index].data = Integer.parseInt(MMU.ram[registers[reg1Index].data], 16);
+                    registers[reg2Index].data = Integer.parseInt(cache[registers[reg1Index].data], 16);
                 } else {
-                    registers[reg2Index].data = Integer.parseInt(MMU.ram[addressIndex], 16);
+                    registers[reg2Index].data = Integer.parseInt(cache[addressIndex], 16);
                 }
                 break;
             }
@@ -339,8 +368,13 @@ public class CPU extends Thread {
         }
     }
 
+    public enum CpuState {
+        FREE,
+        EXECUTING
+    }
+
     @Override
     public String toString() {
-        return "ID: " + cpuId + " | State: " + getCpuStateString();
+        return "ID: " + cpuId + " | State: " + cpuState;
     }
 }

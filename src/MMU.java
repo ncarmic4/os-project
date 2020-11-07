@@ -5,8 +5,8 @@ import java.util.concurrent.Semaphore;
  */
 class MMU
 {
-    static String[] ram = new String[1024];
-    static String[] disk = new String[2048];
+    static String[] ram = new String[Driver.ramSize];
+    static String[] disk = new String[Driver.diskSize];
 
     static void init() {
         for (int i = 0; i < ram.length; i++) {
@@ -55,5 +55,16 @@ class MMU
 
     static void storeDisk(int address, String data) {
         disk[address] = data;
+    }
+
+    // METRICS
+    static int getRamUsage() {
+        int usage = 0;
+        for (int i = 0; i < ram.length; i++) {
+            if(!ram[i].equals("")) {
+                usage++;
+            }
+        }
+        return usage;
     }
 }

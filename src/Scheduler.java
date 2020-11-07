@@ -5,7 +5,10 @@ import java.util.*;
  */
 public class Scheduler {
 
-    public static int mode = 0; // 0 for priority, 1 for FIFO
+    public static SchedulerMode mode = SchedulerMode.PRIORITY;
+
+    public static final ArrayList<PCB> jobList = new ArrayList<>();
+    public static ArrayList<CPU> cpuList = new ArrayList<>();
 
     private static final PriorityQueue<PCB> priorityQueue = new PriorityQueue<>();
     private static final LinkedList<PCB> fifoQueue = new LinkedList<>();
@@ -16,42 +19,43 @@ public class Scheduler {
      */
     static void addJob(PCB job) {
         job.setAddedTime(System.currentTimeMillis());
-        if (mode == 0) {
+        jobList.add(job);
+        if (mode == SchedulerMode.PRIORITY) {
             priorityQueue.add(job);
         } else {
             fifoQueue.add(job);
         }
     }
 
+    static void addCpu(CPU cpu) {
+        cpuList.add(cpu);
+    }
+
+    static synchronized boolean hasNext() {
+        PCB nextJob;
+        if (mode == SchedulerMode.PRIORITY) {
+            nextJob = priorityQueue.peek();
+        } else {
+            nextJob = fifoQueue.peek();
+        }
+        return nextJob == null;
+    }
+
     /**
      * Load the next job from disk into RAM.
      */
-    static PCB nextJob() {
+    static synchronized PCB nextJob() {
         PCB nextJob;
-        if (mode == 0) {
+        if (mode == SchedulerMode.PRIORITY) {
             nextJob = priorityQueue.poll();
         } else {
             nextJob = fifoQueue.poll();
         }
 
         if (nextJob != null) {
-            nextJob.setJobState("running");
-            System.out.println(nextJob);
-            nextJob.setStartTime(System.currentTimeMillis());
+            nextJob.setJobState(PCB.JobState.RUNNING);
         }
         return nextJob;
-    }
-
-    /**
-     * Check if all jobs have finished executing.
-     * @return true if no jobs left.
-     */
-    static boolean allJobsDone() {
-        if (mode == 0) {
-            return priorityQueue.size() == 0;
-        } else {
-            return fifoQueue.size() == 0;
-        }
     }
 
     static void signalInterrupt(CPU cpu) {
@@ -60,7 +64,12 @@ public class Scheduler {
 
     static void handleInterrupt(CPU cpu) {
         PCB blockedJob = cpu.getCurrentJob();
-        blockedJob.setJobState("blocked");
+        blockedJob.setJobState(PCB.JobState.BLOCKED);
         addJob(blockedJob);
+    }
+
+    public enum SchedulerMode {
+        FIFO,
+        PRIORITY
     }
 }
