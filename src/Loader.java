@@ -6,6 +6,7 @@ class Loader
 {
     /**
      * Loads instructions from data file into disk array.
+     * Creates new PCB objects for each job control card, storing important job information.
      */
     static void load() {
         int index = 0;

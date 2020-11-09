@@ -49,6 +49,7 @@ public class PCB implements Comparable<PCB> {
         }
     }
 
+    // Getters/setters
     int getJobId() {
         return jobId;
     }
@@ -61,7 +62,6 @@ public class PCB implements Comparable<PCB> {
     int getPriority() {
         return priority;
     }
-
     JobState getJobState() {
         return jobState;
     }
@@ -80,7 +80,6 @@ public class PCB implements Comparable<PCB> {
     void setRegisters(Register[] registers) {
         this.registers = registers;
     }
-
     int getNumInstructions() {
         return numInstructions;
     }
@@ -96,7 +95,6 @@ public class PCB implements Comparable<PCB> {
     int getTotalSize() {
         return numInstructions + inputBufferSize + outputBufferSize + tempBufferSize;
     }
-
     int getDiskStart() {
         return diskStart;
     }
@@ -142,13 +140,29 @@ public class PCB implements Comparable<PCB> {
         return cacheUsage;
     }
 
-    public enum JobState implements Comparable<JobState> {
-        RUNNING,
-        READY,
+    /**
+     * An enum that holds possible job state values.
+     */
+    public enum JobState {
         BLOCKED,
-        NEW;
+        READY,
+        NEW,
+        RUNNING;
     }
 
+    /**
+     * A comparable override method that holds instructions for comparing two PCB objects.
+     * This is primarily used by the implementation of the Scheduler's priority queue.
+     * First, jobs are ranked by the current state, with blocked jobs having the highest priority.
+     * Jobs of similar ranking are secondly sorted by their priority value that is contained in the job control cards.
+     * Finally, jobs with the state and priority are ranked by their number of instructions, with the least number
+     * taking priority.
+     * @param pcb The job to compare against this job.
+     * @return (See below)
+     *      -1 if job x has a lower priority than job y
+     *      0 if job x has an equal priority to job y
+     *      1 if job x has a higher priority than job y
+     */
     @Override
     public int compareTo(PCB pcb) {
         int stateCompare = jobState.compareTo(pcb.getJobState());

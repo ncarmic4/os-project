@@ -6,8 +6,11 @@ import java.util.Arrays;
  * A class to handle execution of instructions read from memory.
  */
 public class CPU extends Thread {
+
+    // CPU Identification Info
     private PCB currentJob;
     private final int cpuId;
+    private CpuState cpuState;
 
     // Determine opcode by indexing opcodeArray
     private final String[] opcodeArray = {"RD", "WR", "ST", "LW", "MOV", "ADD", "SUB", "MUL", "DIV", "AND",
@@ -26,16 +29,13 @@ public class CPU extends Thread {
     private Register[] registers = new Register[16];
     private final String[] cache = new String[Driver.cacheSize];
 
-    // Assign Job state to numeric value for comparisons in PriorityQueue
-    private CpuState cpuState;
-
     // Program continuation variables
     private int pc;
     private boolean continueExecution = true;
     private boolean hasInterrupt = false;
 
     // METRICS
-    private long startTime;
+    private final long startTime;
     private long completionTime;
     private int ioProcesses = 0;
     private int jobCount;
@@ -47,9 +47,9 @@ public class CPU extends Thread {
     }
 
     /**
-     * A wrapper method to load a variable at a specified address from RAM.
-     * @param index Address of the variable.
-     * @return Value of the variable.
+     * A wrapper method to load an instruction at a specified address from RAM.
+     * @param index Address of the instruction.
+     * @return String value of the instruction.
      */
     private String fetch(int index) {
         return cache[index].substring(0, 8);
@@ -79,6 +79,10 @@ public class CPU extends Thread {
         evaluate(opcodeArray[Integer.parseInt(opcodeBinary, 2)]);
     }
 
+    /**
+     * Main thread execution of the CPU class.
+     * Each CPU will independently check for remaining jobs and execute them accordingly.
+     */
     @Override
     public void run() {
 
@@ -116,6 +120,7 @@ public class CPU extends Thread {
         completionTime = System.currentTimeMillis();
     }
 
+    // Getters/setters
     void resetProgramCounter() {
         this.pc = 0;
         this.continueExecution = true;
@@ -135,24 +140,6 @@ public class CPU extends Thread {
     Register[] getRegisters() {
         return registers;
     }
-    void clearCache() {
-        Arrays.fill(cache, "");
-    }
-    void loadInstructionsToCache() {
-        for (int i = 0; i < currentJob.getTotalSize(); i++) {
-            cache[i] = MMU.loadRam(currentJob.getRamStart() + i);
-        }
-    }
-
-    public int getCacheUsage() {
-        int usage = 0;
-        for (String s : cache) {
-            if (s != null && !s.equals("")) {
-                usage++;
-            }
-        }
-        return usage;
-    }
     public int getCpuId() {
         return cpuId;
     }
@@ -164,6 +151,36 @@ public class CPU extends Thread {
     }
     public int getJobCount() {
         return jobCount;
+    }
+
+    /**
+     * Clear the cache array when the job is unloaded.
+     */
+    void clearCache() {
+        Arrays.fill(cache, "");
+    }
+
+    /**
+     * Read instructions for the current job from RAM into cache.
+     */
+    void loadInstructionsToCache() {
+        for (int i = 0; i < currentJob.getTotalSize(); i++) {
+            cache[i] = MMU.loadRam(currentJob.getRamStart() + i);
+        }
+    }
+
+    /**
+     * Get the number of currently loaded instructions in the cache.
+     * @return number of loaded instructions.
+     */
+    public int getCacheUsage() {
+        int usage = 0;
+        for (String s : cache) {
+            if (s != null && !s.equals("")) {
+                usage++;
+            }
+        }
+        return usage;
     }
 
     /**
@@ -368,6 +385,9 @@ public class CPU extends Thread {
         }
     }
 
+    /**
+     * An enum that depicts the current state of the CPU.
+     */
     public enum CpuState {
         FREE,
         EXECUTING

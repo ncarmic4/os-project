@@ -3,18 +3,22 @@ import java.io.*;
 public class MetricCollector {
 
     static BufferedWriter bufferedWriter;
+    static long globalStartTime;
 
+    /**
+     * Initialize writer to a new file for the simulation.
+     * @param filename Name of the file.
+     * @throws IOException When file cannot be created.
+     */
     static void init(String filename) throws IOException {
         File metrics = new File("./metrics/" + filename);
         bufferedWriter = new BufferedWriter(new PrintWriter(metrics));
     }
 
-    static long globalStartTime;
-
-    static void setGlobalStartTime(long time) {
-        globalStartTime = time;
-    }
-
+    /**
+     * Print information regarding data values to a readme file.
+     * @throws IOException When file cannot be written to.
+     */
     static void printInfo() throws IOException {
         init("README.md");
         bufferedWriter.write("# JOB COMPLETION METRICS\n");
@@ -35,6 +39,10 @@ public class MetricCollector {
         close();
     }
 
+    /**
+     * Print all Simulation Metrics to the file.
+     * @throws IOException When file cannot be written to.
+     */
     static void printAllMetrics() throws IOException {
         listJobMetrics();
         bufferedWriter.newLine();
@@ -42,6 +50,10 @@ public class MetricCollector {
         close();
     }
 
+    /**
+     * Write the individual Job Metrics to the file.
+     * @throws IOException When file cannot be written to.
+     */
     static void listJobMetrics() throws IOException {
         bufferedWriter.write("# JOB COMPLETION METRICS\n");
         bufferedWriter.write("Job ID,CPU ID,Waiting Time,Completion Time,MMU RAM % Used,Job RAM % Used,Job Cache % Used\n");
@@ -56,6 +68,10 @@ public class MetricCollector {
         }
     }
 
+    /**
+     * Write the CPU Metrics to the file.
+     * @throws IOException When file cannot be written to.
+     */
     static void listCpuMetrics() throws IOException {
         bufferedWriter.write("# CPU COMPLETION METRICS\n");
         bufferedWriter.write("CPU ID,Completion Time,I/O Processes,Number of Jobs,% of Jobs\n");
@@ -66,7 +82,15 @@ public class MetricCollector {
         }
     }
 
+    /**
+     * Close the buffered writer.
+     * @throws IOException When the writer fails to close.
+     */
     static void close() throws IOException {
         bufferedWriter.close();
+    }
+
+    static void setGlobalStartTime(long time) {
+        globalStartTime = time;
     }
 }
