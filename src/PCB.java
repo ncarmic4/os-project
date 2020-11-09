@@ -34,6 +34,7 @@ public class PCB implements Comparable<PCB> {
     private long completionTime;
     private int ramUsage;
     private int cacheUsage;
+    private int numIoProcesses = 0;
 
     PCB(String jobId, String numInstructions, String priority, int diskStart) {
         this.jobId = Integer.parseInt(jobId, 16);
@@ -138,6 +139,12 @@ public class PCB implements Comparable<PCB> {
     }
     int getCacheUsage() {
         return cacheUsage;
+    }
+    int getNumIoProcesses () {
+        return numIoProcesses;
+    }
+    void incrementIoProcesses() {
+        numIoProcesses++;
     }
 
     /**

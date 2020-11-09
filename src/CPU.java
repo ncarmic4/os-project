@@ -99,7 +99,7 @@ public class CPU extends Thread {
                 loadInstructionsToCache();
                 nextJob.setCacheUsage(getCacheUsage());
                 while (continueExecution && pc < currentJob.getNumInstructions()) {
-                    // Artificial 1ms exec time for each instruction
+                    // Artificial exec time for each instruction
                     try {
                         Thread.sleep(Driver.msThreadDelay);
                     } catch (InterruptedException e) {
@@ -235,11 +235,13 @@ public class CPU extends Thread {
                     registers[reg1Index].data = Integer.parseInt(cache[addressIndex], 16);
                 }
                 ioProcesses++;
+                currentJob.incrementIoProcesses();
                 break;
             }
             case "WR": {
                 cache[addressIndex] = Integer.toHexString(registers[reg1Index].data);
                 ioProcesses++;
+                currentJob.incrementIoProcesses();
                 break;
             }
             case "ST": {
