@@ -94,4 +94,10 @@ public class MetricCollector {
     static void setGlobalStartTime(long time) {
         globalStartTime = time;
     }
+
+    static void coreDumpRAM() throws IOException {
+        for(String s : MMU.ram) {
+            bufferedWriter.write(s + "\n");
+        }
+    }
 }
